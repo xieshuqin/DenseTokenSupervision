@@ -113,15 +113,14 @@ if __name__ == '__main__':
     # test VideoPerformer
     import torchprof
     device = 'cuda'
-    N, L = 3, 24
+    N, L = 8, 24
     x = torch.randn(N, L, 3, 224, 224).to(device)
-    cls_label = torch.randint(6, (2,), dtype=torch.long).to(device)
-    token_label = torch.randint(8, (2, 24), dtype=torch.long).to(device)
+    cls_label = torch.randint(6, (N,), dtype=torch.long).to(device)
+    token_label = torch.randint(8, (N, L), dtype=torch.long).to(device)
     model_kwargs = dict(
-        patch_size=16, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
+        patch_size=32, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
         qkv_bias=False, norm_layer=nn.LayerNorm)
     model = VideoPerformer(video_length=L, num_token_classes=8, fuse_patch=True, img_size=224, num_classes=6, **model_kwargs).to(device)
-    # with profiler.profile(profile_memory=True, record_shapes=True, use_cuda=True) as prof:
     with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
         cls_logits, token_logits = model(x)
         loss_cls = F.cross_entropy(cls_logits, cls_label)
@@ -129,7 +128,6 @@ if __name__ == '__main__':
         loss = loss_cls + loss_token
         loss.backward()
     print(prof.display(show_events=False))
-    print(prof.key_averages().table(sort_by="self_cuda_memory_usage", row_limit=10))
 
     # test resnet bottomneck
     # from torchvision.models import resnet50
