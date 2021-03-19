@@ -98,18 +98,6 @@ class VideoPerformer(VideoViT):
 
 
 if __name__ == '__main__':
-    # test attention
-    # device = 'cuda'
-    # N, L, C = 3, 1024, 512
-    # x = torch.randn(N, L, C).to(device)
-    # attention = Attention(512, 8).to(device)
-    # linAttention = PerformerAttention(512, 8).to(device)
-    #
-    # out1 = attention(x)
-    # out2 = linAttention(x)
-    # print(out1.shape)
-    # print(out2.shape)
-
     # test VideoPerformer
     import torchprof
     device = 'cuda'
@@ -128,13 +116,3 @@ if __name__ == '__main__':
         loss = loss_cls + loss_token
         loss.backward()
     print(prof.display(show_events=False))
-
-    # test resnet bottomneck
-    # from torchvision.models import resnet50
-    # device = 'cuda'
-    # model = resnet50(True).to(device)
-    # N, L = 16, 32
-    # x = torch.randn(N*L, 3, 224, 224).cuda()
-    # model.eval()
-    # with torch.no_grad():
-    #     out = model(x)
