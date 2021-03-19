@@ -1,5 +1,5 @@
 from torch.utils.data import DataLoader
-from .haa500 import HAA500Dataset, build_hdd500_dataset
+from .haa500 import HAA500Dataset, build_haa500_dataset
 
 DATASETS = {'haa500': build_haa500_dataset}
 

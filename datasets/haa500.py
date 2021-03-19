@@ -162,7 +162,7 @@ def genTrainTestTxt(source):
     return files
 
 
-def build_hdd500_dataset(split, num_frames_per_video):
+def build_haa500_dataset(split, num_frames_per_video):
     assert split in ['train', 'val', 'test']
     datapath = 'data/haa500/'
     video_dir = f'{datapath}/haa500_v1_1/video'
