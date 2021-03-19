@@ -16,7 +16,7 @@ import os
 
 # Need to handle label
 class HAA500Dataset(Dataset):
-    def __init__(self, video_dir, splitfile, actionclassffile, randomAugmentationFactor, mode='totalframes',
+    def __init__(self, video_dir, splitfile, actionclassffile, augment=False, randomAugmentationFactor=0.1, mode='totalframes',
                  mode_val=10):
         super().__init__()
         self.video_dir = video_dir
@@ -24,6 +24,7 @@ class HAA500Dataset(Dataset):
         self.mode_val = mode_val
         self.index_list = self.readSplitFile(splitfile)
         self.actionClass_dict = self.readActionFile(actionclassffile)
+        self.augment = augment
         self.randomAugmentationFactor = randomAugmentationFactor
 
     def readSplitFile(self, splitfile):
@@ -61,12 +62,14 @@ class HAA500Dataset(Dataset):
                 break
 
         # Video augmentation
-        chance = lambda aug: va.Sometimes(self.randomAugmentationFactor, aug)
-        seq = va.Sequential([
-            chance(va.RandomRotate(degrees=10)),
-            chance(va.HorizontalFlip()),
-        ])
-        augmented_video = seq(frames)
+        if self.augment:
+            chance = lambda aug: va.Sometimes(self.randomAugmentationFactor, aug)
+            seq = va.Sequential([
+                chance(va.RandomRotate(degrees=10)),
+                chance(va.HorizontalFlip()),
+            ])
+            # TODO: Raymond: Replace augment_video with frames
+            augmented_video = seq(frames)
 
         # Select frame from video
         selected_frames = []
@@ -75,6 +78,7 @@ class HAA500Dataset(Dataset):
             sample_interval = total_num_of_frames // self.mode_val
 
             # Edge case: When the number of frames in the video does not contain enough number for the required frame
+            # TODO: Raymond: Reuse first frame if not enough
             num_of_actions = self.mode_val
             if (sample_interval < 1):
                 sample_interval = 1
@@ -91,6 +95,7 @@ class HAA500Dataset(Dataset):
         data_transforms = transforms.Compose([
             transforms.Resize((720, 1280)),
             transforms.ToTensor(),
+            transforms.ConvertImageDtype(torch.float),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
         transformed_selected_frames = []
@@ -114,6 +119,7 @@ class HAA500Dataset(Dataset):
 
 
 def genTrainTestTxt(source):
+    # TODO: Raymond: Generate train, val adn test
     files = []
     dictionary = {}
     for root, dirnames, filenames in os.walk(source):
@@ -156,15 +162,17 @@ def genTrainTestTxt(source):
     return files
 
 
-def build_hdd500_dataset(split, **kwargs):
-    # TODO(Shuqin): Fix this function
-    # specify video_dir, splitfile path,
+def build_hdd500_dataset(split, num_frames_per_video):
+    assert split in ['train', 'val', 'test']
     datapath = 'data/haa500/'
     video_dir = f'{datapath}/haa500_v1_1/video'
-    splitfile = f'{datapath}/trainval.txt'
+    splitfile = f'{datapath}/{split}.txt'
     actionclassffile = f'{datapath}/actionClass.txt'
-    dataset = HAA500Dataset(video_dir, splitfile, actionclassffile, randomAugmentationFactor, mode = 'totalframes',
-    mode_val = 10)
+
+    augment = split == 'train'
+    randomAugmentationFactor = 0.5
+    dataset = HAA500Dataset(video_dir, splitfile, actionclassffile, augment=augment, randomAugmentationFactor=randomAugmentationFactor, mode='totalframes',
+    mode_val=num_frames_per_video)
 
     return dataset
 
