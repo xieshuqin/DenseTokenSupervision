@@ -47,6 +47,6 @@ def download_cut(video):
     os.remove('/tmp/%s.mp4' % video[0])
 
 
-videos = json.load(open('finegym/finegym_annotation_info_v1.1.json'))
+videos = json.load(open('data/finegym_annotation_info_v1.1.json'))
 for video in videos.items():
     download_cut(video)
