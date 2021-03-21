@@ -3,11 +3,11 @@ import subprocess
 import os
 
 
-def download_cut(video):
+def download(video):
     exists = []
     for e in video[1].items():
         exists.append(os.path.exists(
-            'finegym/videos/%s/%s.mp4' % (video[0], e[0])))
+            'data/videos/%s/%s.mp4' % (video[0], e[0])))
     if all(exists):
         print('Already cut %s.' % video[0])
         return
@@ -26,15 +26,15 @@ def download_cut(video):
                 attempts += 1
                 if attempts == 4:
                     print('Can\'t download %s.' % video[0])
-                return
+                    return
             else:
                 print('Downloaded %s.' % video[0])
                 break
-    os.makedirs('finegym/videos/%s' % video[0], exist_ok=True)
+    os.makedirs('data/videos/%s' % video[0], exist_ok=True)
     command = 'ffmpeg -i "/tmp/%s.mp4"' % video[0]
     for e in video[1].items():
-        command += ' -ss %f -t %f finegym/videos/%s/%s.mp4' % (e[1]['timestamps']
-                                                               [0][0], e[1]['timestamps'][0][1]-e[1]['timestamps'][0][0], video[0], e[0])
+        command += ' -ss %f -t %f data/videos/%s/%s.mp4' % (e[1]['timestamps']
+                                                            [0][0], e[1]['timestamps'][0][1]-e[1]['timestamps'][0][0], video[0], e[0])
     command += ' -c:v libx264 -c:a copy -threads 12 -loglevel panic'
     print(command)
     try:
@@ -49,4 +49,4 @@ def download_cut(video):
 
 videos = json.load(open('data/finegym_annotation_info_v1.1.json'))
 for video in videos.items():
-    download_cut(video)
+    download(video)

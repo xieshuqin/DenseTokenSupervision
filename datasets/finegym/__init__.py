@@ -7,6 +7,7 @@ from IPython import embed
 import os
 from PIL import Image
 import numpy as np
+import random
 
 
 class FineGym(Dataset):
@@ -24,15 +25,17 @@ class FineGym(Dataset):
             k, v = line.split()
             k = k.split('_')
             v_id = k[0]
-            e_id = 'E_'+k[2]+'_'+k[3]
-            events[e_id]['video'] = path+'/videos/'+v_id+'/'+e_id+'.mp4'
+            e_id = v_id+'_E_'+k[2]+'_'+k[3]
+            events[e_id]['video'] = path+'/videos/' + \
+                v_id+'/'+'E_'+k[2]+'_'+k[3]+'.mp4'
             events[e_id]['actions'].append(
                 (int(k[5]), int(k[6])+(k[5] == k[6]))+categories[v])
-            events[e_id]['event'] = name_to_event[v_id][e_id]['event']
+            events[e_id]['event'] = name_to_event[v_id]['E_' +
+                                                        k[2]+'_'+k[3]]['event']
         self.events = events
         self.event_names = list(sorted(events.keys()))
         self.event_names = [
-            n for n in self.event_names if os.path.exists(events[n]['video'])]
+            n for n in self.event_names if os.path.exists(events[n]['video']) and '1JsRXIoR3C0' not in n]
         self.num_frames_per_video = num_frames_per_video
         self.frame_size = frame_size
 
@@ -42,63 +45,57 @@ class FineGym(Dataset):
     def __getitem__(self, index):
         event_name = self.event_names[index]
         event = self.events[event_name]
-        useful_time = 0
         actions = event['actions']
-        for a in actions:
-            useful_time += a[1]-a[0]
-        self.fps = self.num_frames_per_video/useful_time
+        action_hit = [0 for i in range(len(actions))]
+        for i in range(self.num_frames_per_video):
+            action_hit[i % len(action_hit)] += 1
         cap = cv2.VideoCapture(event['video'])
         assert(cap.isOpened())
-        sample_factor = 1
-        old_fps = cap.get(cv2.CAP_PROP_FPS)  # fps of video
-        sample_factor = int(old_fps / self.fps)
-        assert(sample_factor >= 1)
-        num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        time_len = int(num_frames / sample_factor)
         good_frames = []
         good_labels = []
         good_label = torch.tensor(event['event'])
-        for index in range(time_len):
-            frame_index = sample_factor * index
-            true_time = frame_index/old_fps
-            label = None
-            for a in actions:
-                if a[0] <= true_time <= a[1]:
-                    label = a[3]
-            if not label:
-                continue
-            label = torch.tensor(label)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-            ret, frame = cap.read()
-            assert(ret)
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (self.frame_size, self.frame_size))
-            frame = torch.from_numpy(frame).float()
-            frame = frame.permute(2, 0, 1)/255
-            good_frames.append(frame)
-            good_labels.append(label)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        mx = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        for i in range(len(actions)):
+            a = actions[i]
+            for j in range(action_hit[i]):
+                true_time = (j+1)/(action_hit[i]+1)*(a[1]-a[0])+a[0]
+                frame_index = min(fps*true_time, mx)
+                label = torch.tensor(a[3])
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+                ret, frame = cap.read()
+                assert(ret)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = cv2.resize(frame, (self.frame_size, self.frame_size))
+                frame = torch.from_numpy(frame).float()
+                frame = frame.permute(2, 0, 1)/255
+                good_frames.append(frame)
+                good_labels.append(label)
         cap.release()
-        while len(good_frames) < self.num_frames_per_video:
-            good_frames.append(good_frames[-1])
-            good_labels.append(good_labels[-1])
-        return torch.stack(good_frames[:self.num_frames_per_video]), torch.stack(good_labels[:self.num_frames_per_video]), good_label
+        assert(len(good_frames) == self.num_frames_per_video)
+        return torch.stack(good_frames), torch.stack(good_labels), good_label
 
 
 if __name__ == '__main__':
-    dataset = FineGym('data', 'train', 4, 224)
+    dataset = FineGym('data', 'train', 2, 224)
     all_labels = set()
     all_frame_labels = set()
     all_has_multiple = []
+    random.shuffle(dataset.event_names)
+    print(len(dataset))
     for i in range(len(dataset)):
         frames, frame_labels, label = dataset[i]
-        for j in []:
-            Image.fromarray((frames[j].numpy().transpose(
-                1, 2, 0)*255).astype(np.uint8)).show()
         all_labels.add(label.item())
         frame_labels = {l.item()for l in frame_labels}
         for l in frame_labels:
             all_frame_labels.add(l)
         all_has_multiple.append(len(frame_labels) > 1)
+        if all_has_multiple[-1] and False:
+            for j in range(4):
+                Image.fromarray((frames[j].numpy().transpose(
+                    1, 2, 0)*255).astype(np.uint8)).show()
+            print(frame_labels)
+            exit(0)
         print('num_videos', len(all_has_multiple))
         print('num_video_classes', len(all_labels))
         print('num_videos_has_more_than_one_subactions', sum(all_has_multiple))
