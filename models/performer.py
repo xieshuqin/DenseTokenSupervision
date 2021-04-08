@@ -12,7 +12,7 @@ from collections import OrderedDict
 from timm.models.vision_transformer import Mlp, DropPath, trunc_normal_
 from performer_pytorch import SelfAttention
 
-from models.transformer import VideoViT
+from transformer import VideoViT
 
 
 class Attention(nn.Module):
@@ -50,6 +50,7 @@ class PerformerAttention(nn.Module):
         self.layer = SelfAttention(
             dim,
             heads=num_heads,
+            dim_head=None,
             causal=True,
             dropout=attn_drop
         )
@@ -84,6 +85,7 @@ class VideoPerformer(VideoViT):
                  depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False,
                  qk_scale=None, drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
                  norm_layer=nn.LayerNorm,
+                 pretrained=False,
                  **kwargs):
         super().__init__(*args,
                          depth=depth, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
@@ -95,21 +97,61 @@ class VideoPerformer(VideoViT):
                 dim=self.embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
+        if pretrained:
+            patch_size=kwargs['patch_size']
+            embed_dim=kwargs['embed_dim']
+            transformer=None
+            if patch_size==16 and embed_dim==768 and depth==8 and mlp_ratio==3. and qkv_bias==False and norm_layer==nn.LayerNorm:
+                from timm.models.vision_transformer import vit_small_patch16_224
+                transformer=lambda:vit_small_patch16_224(True)
+            assert transformer is not None
+            transformer=transformer()
+            model=self
+            for old_key in transformer.state_dict():
+                if old_key in ['head.weight','head.bias']:
+                    continue
+                elif 'attn' not in old_key:
+                    new_key=old_key
+                    model.state_dict()[new_key][:]=transformer.state_dict()[old_key]
+                    print(new_key,'<-',old_key)
+                elif 'proj' in old_key:
+                    new_key=old_key.replace('proj','layer.to_out')
+                    model.state_dict()[new_key][:]=transformer.state_dict()[old_key]
+                    print(new_key,'<-',old_key)
+                else:
+                    new_key=old_key.replace('qkv','layer.to_q')
+                    model.state_dict()[new_key][:]=transformer.state_dict()[old_key][:embed_dim]
+                    print(new_key,'<-',old_key+'[:%d]'%embed_dim)
+                    new_key=new_key.replace('weight','bias')
+                    model.state_dict()[new_key][:]=0
+                    print(new_key,'<-',0)
+                    new_key=old_key.replace('qkv','layer.to_k')
+                    model.state_dict()[new_key][:]=transformer.state_dict()[old_key][embed_dim:2*embed_dim]
+                    print(new_key,'<-',old_key+'[%d:%d]'%(2*embed_dim,embed_dim))
+                    new_key=new_key.replace('weight','bias')
+                    model.state_dict()[new_key][:]=0
+                    print(new_key,'<-',0)
+                    new_key=old_key.replace('qkv','layer.to_v')
+                    model.state_dict()[new_key][:]=transformer.state_dict()[old_key][2*embed_dim:]
+                    print(new_key,'<-',old_key+'[%d:]'%(2*embed_dim))
+                    new_key=new_key.replace('weight','bias')
+                    model.state_dict()[new_key][:]=0
+                    print(new_key,'<-',0)
 
 
 if __name__ == '__main__':
     # test VideoPerformer
     import torchprof
-    device = 'cuda'
-    N, L = 8, 24
+    device = 'cpu'
+    N, L = 1, 1
     x = torch.randn(N, L, 3, 224, 224).to(device)
     cls_label = torch.randint(6, (N,), dtype=torch.long).to(device)
     token_label = torch.randint(8, (N, L), dtype=torch.long).to(device)
     model_kwargs = dict(
-        patch_size=32, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
+        patch_size=16, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
         qkv_bias=False, norm_layer=nn.LayerNorm)
-    model = VideoPerformer(video_length=L, num_token_classes=8, fuse_patch=True, img_size=224, num_classes=6, **model_kwargs).to(device)
-    with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
+    model = VideoPerformer(pretrained=True,video_length=L, num_token_classes=8, fuse_patch=True, img_size=224, num_classes=6, **model_kwargs).to(device)
+    with torchprof.Profile(model, use_cuda=False, profile_memory=True) as prof:
         cls_logits, token_logits = model(x)
         loss_cls = F.cross_entropy(cls_logits, cls_label)
         loss_token = F.cross_entropy(token_logits.flatten(start_dim=0, end_dim=1), token_label.flatten())
