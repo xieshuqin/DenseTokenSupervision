@@ -4,10 +4,11 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from abc import ABCMeta, abstractmethod
+from datasets import build_dataloader
 
 
 class BaseModel(pl.LightningModule, metaclass=ABCMeta):
-    def __init__(self, dataset_type, batch_size, **dataset_args):
+    def __init__(self, dataset_type, batch_size, num_epochs, lr, **dataset_args):
         super().__init__()
         self.dataset_type = dataset_type
         self.batch_size = batch_size
