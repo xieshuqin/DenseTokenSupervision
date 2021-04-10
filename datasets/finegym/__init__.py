@@ -8,6 +8,7 @@ import os
 from PIL import Image
 import numpy as np
 import random
+import shutil
 
 
 class FineGym(Dataset):
@@ -77,26 +78,44 @@ class FineGym(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = FineGym('data', 'train', 2, 224)
-    all_labels = set()
-    all_frame_labels = set()
-    all_has_multiple = []
-    random.shuffle(dataset.event_names)
-    print(len(dataset))
-    for i in range(len(dataset)):
-        frames, frame_labels, label = dataset[i]
-        all_labels.add(label.item())
-        frame_labels = {l.item()for l in frame_labels}
-        for l in frame_labels:
-            all_frame_labels.add(l)
-        all_has_multiple.append(len(frame_labels) > 1)
-        if all_has_multiple[-1] and False:
-            for j in range(4):
-                Image.fromarray((frames[j].numpy().transpose(
-                    1, 2, 0)*255).astype(np.uint8)).show()
-            print(frame_labels)
-            exit(0)
-        print('num_videos', len(all_has_multiple))
-        print('num_video_classes', len(all_labels))
-        print('num_videos_has_more_than_one_subactions', sum(all_has_multiple))
-        print('num_subactions', len(all_frame_labels))
+    def statistics():
+        dataset = FineGym('data', 'train', 2, 224)
+        all_labels = set()
+        all_frame_labels = set()
+        all_has_multiple = []
+        random.shuffle(dataset.event_names)
+        print(len(dataset))
+        for i in range(len(dataset)):
+            frames, frame_labels, label = dataset[i]
+            all_labels.add(label.item())
+            frame_labels = {l.item()for l in frame_labels}
+            for l in frame_labels:
+                all_frame_labels.add(l)
+            all_has_multiple.append(len(frame_labels) > 1)
+            if all_has_multiple[-1] and False:
+                for j in range(4):
+                    Image.fromarray((frames[j].numpy().transpose(
+                        1, 2, 0)*255).astype(np.uint8)).show()
+                print(frame_labels)
+                exit(0)
+            print('num_videos', len(all_has_multiple))
+            print('num_video_classes', len(all_labels))
+            print('num_videos_has_more_than_one_subactions', sum(all_has_multiple))
+            print('num_subactions', len(all_frame_labels))
+
+    def visulization():
+        dataset = FineGym('data', 'train', 32, 224)
+        random.shuffle(dataset.event_names)
+        path = '/tmp/finegym_vis'
+        if os.path.exists(path):
+            shutil.rmtree(path)
+        for i in range(10):
+            fs, ls, l = dataset[i]
+            new_path = path+'/'+'%04d_%04d' % (i, l)
+            os.makedirs(new_path)
+            for j in range(len(fs)):
+                img = (fs[j].numpy().transpose(
+                    1, 2, 0)*255).astype(np.uint8)
+                cv2.imwrite(new_path+'/'+'%04d_%04d.png' %
+                            (j, ls[j]), img[:, :, ::-1])
+    visulization()
