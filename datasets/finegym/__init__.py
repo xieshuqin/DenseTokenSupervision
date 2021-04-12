@@ -94,9 +94,10 @@ class FineGym(Dataset):
         return torch.stack(good_frames), torch.stack(good_labels), good_label-1
 
 
-def build_finegym_dataset(split, num_frames_per_video=2, frame_size=224, augment=False):
+def build_finegym_dataset(split, num_frames_per_video=2, frame_size=224):
     path = '/home/shuqin/hdd/datasets/finegym/data'
-    return FineGym(path=path, split=split, num_frames_per_video=num_frames_per_video, frame_size=frame_size)
+    augment = split == 'train'
+    return FineGym(path=path, split=split, num_frames_per_video=num_frames_per_video, frame_size=frame_size, augment=augment)
 
 
 if __name__ == '__main__':

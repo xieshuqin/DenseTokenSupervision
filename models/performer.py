@@ -12,9 +12,10 @@ from collections import OrderedDict
 from timm.models.vision_transformer import Mlp, DropPath, trunc_normal_
 from performer_pytorch import SelfAttention
 
-from transformer import VideoViT
+from models.transformer import VideoTransformer
 
 
+"""Attention from VisionTransformer"""
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -51,8 +52,10 @@ class PerformerAttention(nn.Module):
             dim,
             heads=num_heads,
             dim_head=None,
-            causal=True,
-            dropout=attn_drop
+            causal=False,
+            local_heads=0,
+            dropout=attn_drop,
+            nb_features=256,
         )
 
     def forward(self, x):
@@ -79,7 +82,7 @@ class PerformerBlock(nn.Module):
         return x
 
 
-class VideoPerformer(VideoViT):
+class VideoPerformer(VideoTransformer):
     def __init__(self,
                  *args,
                  depth=12, num_heads=12, mlp_ratio=4., qkv_bias=False,
@@ -97,6 +100,8 @@ class VideoPerformer(VideoViT):
                 dim=self.embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
+
+
         if pretrained:
             patch_size=kwargs['patch_size']
             embed_dim=kwargs['embed_dim']
@@ -105,11 +110,21 @@ class VideoPerformer(VideoViT):
                 from timm.models.vision_transformer import vit_small_patch16_224
                 transformer=lambda:vit_small_patch16_224(True)
             assert transformer is not None
-            transformer=transformer()
+            # from timm.models.vision_transformer import vit_base_patch16_224
+            # transformer=vit_base_patch16_224(pretrained=True)
+            transformer = transformer()
             model=self
             for old_key in transformer.state_dict():
                 if old_key in ['head.weight','head.bias']:
                     continue
+                elif old_key == 'pos_embed':
+                    new_key=old_key
+                    model.state_dict()[new_key][0,0]=transformer.state_dict()[old_key][0,0]
+                    num_patch = transformer.state_dict()[old_key].size(1) - 1
+                    video_length = (model.state_dict()[new_key].size(1)-1) // num_patch
+                    for i in range(video_length):
+                        model.state_dict()[new_key][0,1+i*num_patch:1+(i+1)*num_patch] = transformer.state_dict()[old_key][0,1:]
+                    print(new_key,'<-',old_key)
                 elif 'attn' not in old_key:
                     new_key=old_key
                     model.state_dict()[new_key][:]=transformer.state_dict()[old_key]
@@ -142,8 +157,8 @@ class VideoPerformer(VideoViT):
 if __name__ == '__main__':
     # test VideoPerformer
     import torchprof
-    device = 'cpu'
-    N, L = 1, 1
+    device = 'cuda'
+    N, L = 4, 8
     x = torch.randn(N, L, 3, 224, 224).to(device)
     cls_label = torch.randint(6, (N,), dtype=torch.long).to(device)
     token_label = torch.randint(8, (N, L), dtype=torch.long).to(device)
@@ -151,10 +166,10 @@ if __name__ == '__main__':
         patch_size=16, embed_dim=768, depth=8, num_heads=8, mlp_ratio=3.,
         qkv_bias=False, norm_layer=nn.LayerNorm)
     model = VideoPerformer(pretrained=True,video_length=L, num_token_classes=8, fuse_patch=True, img_size=224, num_classes=6, **model_kwargs).to(device)
-    with torchprof.Profile(model, use_cuda=False, profile_memory=True) as prof:
-        cls_logits, token_logits = model(x)
-        loss_cls = F.cross_entropy(cls_logits, cls_label)
-        loss_token = F.cross_entropy(token_logits.flatten(start_dim=0, end_dim=1), token_label.flatten())
-        loss = loss_cls + loss_token
-        loss.backward()
-    print(prof.display(show_events=False))
+    # with torchprof.Profile(model, use_cuda=False, profile_memory=True) as prof:
+    cls_logits, token_logits = model(x)
+    loss_cls = F.cross_entropy(cls_logits, cls_label)
+    loss_token = F.cross_entropy(token_logits.flatten(start_dim=0, end_dim=1), token_label.flatten())
+    loss = loss_cls + loss_token
+    loss.backward()
+    # print(prof.display(show_events=False))

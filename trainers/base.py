@@ -17,6 +17,9 @@ class BaseModel(pl.LightningModule, metaclass=ABCMeta):
         self.num_epochs = num_epochs
         self.lr = lr
 
+        self.cls_acc = pl.metrics.Accuracy()
+        self.frame_acc = pl.metrics.Accuracy()
+
     def train_dataloader(self):
         return build_dataloader(self.dataset_type, split='train', batch_size=self.batch_size, **self.dataset_args)
 

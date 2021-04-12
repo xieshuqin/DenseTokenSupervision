@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchprof
 
 from timm.models.vision_transformer import Attention, VisionTransformer
-from models.transformer import VideoViT
+from models.transformer import VideoTransformer
 from models.performer import PerformerAttention, PerformerBlock, VideoPerformer
 
 
