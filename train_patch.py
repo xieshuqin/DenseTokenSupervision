@@ -37,6 +37,7 @@ def trainer():
     print_freq = 100
     eval_freq = 1
     save_freq = 1
+    exp_name = f'patch_transformer/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}'
 
     train_transform = T.Compose([
         T.RandomResizedCrop(224),
@@ -67,7 +68,7 @@ def trainer():
 
     step = 0
     best_acc = 0.
-    writter = SummaryWriter(f'experiments/patch_transformer/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}')
+    writter = SummaryWriter(f'experiments/{exp_name}')
     top1_acc, top5_acc = Accuracy(top_k=1, compute_on_step=False).cuda(), Accuracy(top_k=5, compute_on_step=False).cuda()
     for epoch in range(max_epochs):
         transformer.train()
@@ -130,19 +131,19 @@ def trainer():
             cur_acc = top1_acc.compute().item()
             if cur_acc > best_acc:
                 best_acc = cur_acc
-                os.makedirs(f'ckpts/patch_transformer/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}', exist_ok=True)
+                os.makedirs(f'ckpts/{exp_name}', exist_ok=True)
                 obj = {'epoch': epoch,
                        'state_dict': transformer.state_dict(),
                        'optimizer_state_dict': optimizer.state_dict(),
                        'scheduler_state_dict': scheduler.state_dict()}
-                torch.save(obj, f'ckpts/patch_transformer/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}/model_best.pth.tar')
+                torch.save(obj, f'ckpts/{exp_name}/model_best.pth.tar')
             if epoch % save_freq == 0:
-                os.makedirs('ckpts/patch_transformer', exist_ok=True)
+                os.makedirs(f'ckpts/{exp_name}', exist_ok=True)
                 obj = {'epoch': epoch,
                        'state_dict': transformer.state_dict(),
                        'optimizer_state_dict': optimizer.state_dict(),
                        'scheduler_state_dict': scheduler.state_dict()}
-                torch.save(obj, f'ckpts/patch_transformer/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}/model_{epoch}.pth.tar')
+                torch.save(obj, f'ckpts/{exp_name}/model_{epoch}.pth.tar')
 
             top1_acc.reset()
             top5_acc.reset()
