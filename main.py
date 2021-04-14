@@ -8,8 +8,8 @@ from models.transformer import video_vit_small_patch16_224, video_vit_base_patch
 from trainer import Trainer
 
 model_factory = {
-    'video_vit_small': partial(video_vit_small_patch16_224, num_classes=4, num_token_classes=288),
-    'video_vit_base': partial(video_vit_base_patch_224, num_classes=4, num_token_classes=288),
+    'video_vit_small': partial(video_vit_small_patch16_224, num_classes=4, num_token_classes=288, fuse_patch=False),
+    'video_vit_base': partial(video_vit_base_patch_224, num_classes=4, num_token_classes=288, fuse_patch=False),
 }
 
 dataset_kwargs = {

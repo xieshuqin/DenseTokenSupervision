@@ -48,7 +48,7 @@ class Trainer(pl.LightningModule):
         logs = {'loss': loss, 'loss_video': loss_video, 'loss_frame': loss_frame}
         tqdm_logs = {'loss_video': loss_video, 'loss_frame': loss_frame}
 
-        return {'loss': loss, 'progress_bar': tqdm_logs, 'logs': logs}
+        return {'loss': loss, 'progress_bar': tqdm_logs, 'log': logs}
 
     def validation_step(self, batch, batch_idx):
         x, y_frame, y_video = batch  # y_video: N, y_frames: N x L
