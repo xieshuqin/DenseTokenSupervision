@@ -25,9 +25,9 @@ def parse_args():
     parser.add_argument('--dataset', default='finegym',
                         choices=list(dataset_kwargs.keys()), type=str)
     parser.add_argument('--seq_len', default=8, help='Video sequence length')
-    parser.add_argument('--lr', default=1e-4, type=float)
-    parser.add_argument('--bs', default=4, type=int)
-    parser.add_argument('--epochs', default=100, type=int)
+    parser.add_argument('--lr', default=1e-5, type=float)
+    parser.add_argument('--bs', default=16, type=int)
+    parser.add_argument('--epochs', default=1, type=int)
     parser.add_argument('--w_video', default=1., type=float,
                         help='weight for video classification loss')
     parser.add_argument('--w_frame', default=1., type=float,
@@ -46,7 +46,7 @@ def main():
     # model = model.load_from_checkpoint('./lightning_logs/version_22/checkpoints/epoch=249-step=109499.ckpt')
     trainer = pl.Trainer(
         max_epochs=args.epochs, gpus=1, default_root_dir='./runs/%s' % args.model,
-        gradient_clip_val=1.,
+        gradient_clip_val=1., log_every_n_steps=1, val_check_interval=100
     )
     trainer.fit(model)
     # trainer.test(model)
