@@ -95,7 +95,7 @@ class FineGym(Dataset):
 
 
 def build_finegym_dataset(split, num_frames_per_video=2, frame_size=224):
-    path = '/home/shuqin/hdd/datasets/finegym/data'
+    path = '/mnt/datasets/finegym/data'
     augment = split == 'train'
     return FineGym(path=path, split=split, num_frames_per_video=num_frames_per_video, frame_size=frame_size, augment=augment)
 

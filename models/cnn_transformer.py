@@ -1,71 +1,118 @@
+# Implement per-token output transformer
+# Code is based on
+#     https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.models as models
+from collections import OrderedDict
+from functools import partial
+from timm.models.vision_transformer import VisionTransformer, trunc_normal_
+from timm.models.vision_transformer import vit_small_patch16_224, vit_small_resnet26d_224, vit_base_patch16_224, \
+    vit_base_patch16_384, vit_base_patch32_384, vit_large_patch16_224, vit_large_patch16_384, vit_large_patch32_384, \
+    vit_huge_patch16_224, vit_huge_patch32_384, vit_base_resnet26d_224, vit_base_resnet50d_224, vit_small_resnet50d_s3_224
 
-from timm.models import VisionTransformer
-from models.base import BaseModel
 
+class VideoCNNTransformer(VisionTransformer):
+    def __init__(self, video_length, num_token_classes, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.video_length = video_length
+        self.num_token_classes = num_token_classes
 
-class CNNVideoTransformer(BaseModel):
-    def __init__(self):
-        # TODO: define model here and pass args to parentClass
-        super().__init__()
-        self.feature_extractor = NotImplemented
-        self.transformer = NotImplemented
+        token_length = video_length
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, 1+token_length, self.embed_dim))
 
-        self.cls_acc = NotImplemented
-        self.frame_acc = NotImplemented
+        # Classifier head
+        self.cls_head = nn.Linear(
+            self.num_features, self.num_classes) if self.num_classes > 0 else nn.Identity()
+        self.token_head = nn.Linear(
+            self.num_features, num_token_classes) if num_token_classes > 0 else nn.Identity()
+
+        trunc_normal_(self.pos_embed, std=.02)
+        self.apply(self._init_weights)
+        self.cnn = models.resnet18(True)
+
+    def get_classifier(self):
+        return self.cls_head, self.token_head
+
+    def reset_classifier(self, num_classes, num_token_classes, global_pool=''):
+        self.num_classes = num_classes
+        self.num_token_classes = num_token_classes
+        assert num_classes > 0
+        self.cls_head = nn.Linear(self.embed_dim, num_classes)
+        nn.init.normal_(self.cls_head.weight, std=0.01)
+        nn.init.zeros_(self.cls_head.bias)
+        assert num_token_classes > 0
+        self.token_head = nn.Linear(self.embed_dim, num_token_classes)
+        nn.init.normal_(self.token_head.weight, std=0.01)
+        nn.init.zeros_(self.token_head.bias)
+
+    def forward_features(self, x):
+        """
+        :param x: B x L x C x H x W
+        :return: x: B x (1+Lhw) x C'
+        """
+        B, L = x.shape[:2]
+
+        x = x.flatten(start_dim=0, end_dim=1)
+        x = self.patch_embed(x)
+        x = x.reshape(B, L, x.shape[-2], x.shape[-1]
+                      ).flatten(start_dim=1, end_dim=2)
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
+
+        for blk in self.blocks:
+            x = blk(x)
+
+        x = self.norm(x)
+        return x
 
     def forward(self, x):
-        """
-        :param x: imgs, N x L x C x H x W, L is sequence length
-        :return:
-        """
-        # TODO: Implement forward
-        N, L = x.shape[:2]
-        x = x.flatten(start_dim=0, end_dim=2)  # NL x C x H x W
-        features = self.feature_extractor(x)  # NL x C' x H' x W'
-        features = features.view(N, L, *(features.shape[1:]))  # N x L x C' x H' x W'
-        frame_features = self.extract_frame_features(features)  # N x L x C'
-        # Note that video-level cls and frame lvl cls can be different, don't necessary to form a vector.
-        cls_logits, frame_logits = self.transformer(frame_features)  # N x Cls1, N x L x Cls2
-        return cls_logits, frame_logits
-
-    def training_step(self, batch, batch_idx):
-        x, y_cls, y_frames = batch  # y_cls: N, y_frames: N x L
-
-        cls_logits, frame_logits = self.forward(x)
-        loss_cls = F.cross_entropy(cls_logits, y_cls)
-        loss_frames = F.cross_entropy(frame_logits, y_frames, reduction='none').sum(1).mean()
-        loss = loss_cls + loss_frames
-
-        tensorboard_logs = {'loss': loss, 'loss_cls': loss_cls, 'loss_frames': loss_frames}
-
-        return {'loss': loss, 'logs': tensorboard_logs}
-
-    def validation_step(self, batch, batch_idx):
-        x, y_cls, y_frame = batch  # y_cls: N, y_frames: N x L
-
-        cls_logits, frame_logits = self.forward(x)
-        loss_cls = F.cross_entropy(cls_logits, y_cls)
-        loss_frames = F.cross_entropy(frame_logits, y_frame, reduction='none').sum(1).mean()
-        loss = loss_cls + loss_frames
-
-        _, y_cls_hat = torch.max(cls_logits, dim=1)
-        _, y_frame_hat = torch.max(frame_logits, dim=2)
-        cls_acc = self.cls_acc(y_cls_hat, y_cls)
-        frame_acc = self.frame_acc(y_frame_hat.flatten(), y_frame.flatten())  # TODO: Verify this
-
-        return {'val_loss': loss, 'val_cls_acc': cls_acc, 'val_frame_acc': frame_acc}
-
-    def validation_epoch_end(self, outputs):
+        x = self.forward_features(x)  # B x (1+LHW) x C
+        cls_logits = self.cls_head(x[:, 0])  # B x C'
+        token_logits = self.token_head(x[:, 1:])  # N x L x C''
+        return cls_logits, token_logits
 
 
-    def test_step(self, batch, batch_idx):
-        # TODO: Implement test step
-        pass
+def video_cnnt_small_patch16_224(seq_len, num_classes, num_token_classes):
+    model = VideoCNNTransformer(seq_len, num_token_classes,
+                                patch_size=16, embed_dim=768, depth=8, num_heads=8,
+                                mlp_ratio=3., qk_scale=768 ** -0.5)
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.num_epochs)
-        return [optimizer], [scheduler]
+    model.reset_classifier(num_classes=num_classes,
+                           num_token_classes=num_token_classes)
+    return model
+
+
+def video_cnnt_base_patch_224(seq_len, num_classes, num_token_classes):
+    model = VideoCNNTransformer(seq_len, num_token_classes, fuse_patch,
+                                patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+                                norm_layer=partial(nn.LayerNorm, eps=1e-6))
+
+    model.reset_classifier(num_classes=num_classes,
+                           num_token_classes=num_token_classes)
+    return model
+
+
+def video_cnnt_large_patch_224(seq_len, num_classes, num_token_classes):
+    model = VideoCNNTransformer(seq_len, num_token_classes, fuse_patch,
+                                patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
+                                norm_layer=partial(nn.LayerNorm, eps=1e-6))
+
+    model.reset_classifier(num_classes=num_classes,
+                           num_token_classes=num_token_classes)
+    return model
+
+
+if __name__ == '__main__':
+    device = 'cuda'
+    x = torch.randn(2, 4, 3, 224, 224).to(device)
+    model = VideoCNNTransformer(4, 8, fuse_patch=True,
+                                img_size=224, num_classes=6).to(device)
+    cls_logits, token_logits = model(x)
+    print(cls_logits.shape, token_logits.shape)
