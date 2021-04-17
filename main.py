@@ -46,7 +46,7 @@ def main():
     # model = model.load_from_checkpoint('./lightning_logs/version_22/checkpoints/epoch=249-step=109499.ckpt')
     trainer = pl.Trainer(
         max_epochs=args.epochs, gpus=1, default_root_dir='./runs/%s' % args.model,
-        gradient_clip_val=1., log_every_n_steps=1, val_check_interval=50
+        gradient_clip_val=1., log_every_n_steps=1, val_check_interval=100
     )
     trainer.fit(model)
     # trainer.test(model)
