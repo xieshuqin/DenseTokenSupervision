@@ -78,7 +78,7 @@ class FineGym(Dataset):
                 frame -= IMAGENET_DEFAULT_MEAN
                 frame /= IMAGENET_DEFAULT_STD
                 good_frames.append(frame)
-                good_labels.append(label)
+                good_labels.append(good_label-1)
         cap.release()
         assert(len(good_frames) == self.num_frames_per_video)
         if self.augment:
