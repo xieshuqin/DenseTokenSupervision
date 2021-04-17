@@ -33,6 +33,7 @@ class VideoCNNTransformer(VisionTransformer):
         trunc_normal_(self.pos_embed, std=.02)
         self.apply(self._init_weights)
         self.cnn = models.resnet18(True)
+        self.cnn2 = nn.Linear(1000, self.num_features)
 
     def get_classifier(self):
         return self.cls_head, self.token_head
@@ -57,9 +58,9 @@ class VideoCNNTransformer(VisionTransformer):
         B, L = x.shape[:2]
 
         x = x.flatten(start_dim=0, end_dim=1)
-        x = self.patch_embed(x)
-        x = x.reshape(B, L, x.shape[-2], x.shape[-1]
-                      ).flatten(start_dim=1, end_dim=2)
+        x = self.cnn2(self.cnn(x))
+        x = x.reshape(B, L, x.shape[-1]
+                      )
 
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
@@ -112,7 +113,7 @@ def video_cnnt_large_patch_224(seq_len, num_classes, num_token_classes):
 if __name__ == '__main__':
     device = 'cuda'
     x = torch.randn(2, 4, 3, 224, 224).to(device)
-    model = VideoCNNTransformer(4, 8, fuse_patch=True,
+    model = VideoCNNTransformer(4, 8,
                                 img_size=224, num_classes=6).to(device)
     cls_logits, token_logits = model(x)
     print(cls_logits.shape, token_logits.shape)

@@ -5,27 +5,33 @@ import pytorch_lightning as pl
 from functools import partial
 
 from models.transformer import video_vit_small_patch16_224, video_vit_base_patch_224
+from models.cnn_transformer import video_cnnt_small_patch16_224
 from trainer import Trainer
 
 model_factory = {
     'video_vit_small': partial(video_vit_small_patch16_224, num_classes=4, num_token_classes=288, fuse_patch=True),
     'video_vit_base': partial(video_vit_base_patch_224, num_classes=4, num_token_classes=288, fuse_patch=True),
+    'video_cnnt_small': partial(video_cnnt_small_patch16_224, num_classes=4, num_token_classes=288),
 }
 
 dataset_kwargs = {
     'finegym': partial(dict, frame_size=224),
 }
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', choices=list(model_factory.keys()), type=str)
-    parser.add_argument('--dataset', default='finegym', choices=list(dataset_kwargs.keys()), type=str)
+    parser.add_argument('--dataset', default='finegym',
+                        choices=list(dataset_kwargs.keys()), type=str)
     parser.add_argument('--seq_len', default=8, help='Video sequence length')
     parser.add_argument('--lr', default=1e-4, type=float)
     parser.add_argument('--bs', default=4, type=int)
     parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument('--w_video', default=1., type=float, help='weight for video classification loss')
-    parser.add_argument('--w_frame', default=1., type=float, help='weight for frame classification loss')
+    parser.add_argument('--w_video', default=1., type=float,
+                        help='weight for video classification loss')
+    parser.add_argument('--w_frame', default=1., type=float,
+                        help='weight for frame classification loss')
     return parser.parse_args()
 
 
