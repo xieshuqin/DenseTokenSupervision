@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument('--max_epochs', type=int, default=8, help='Number of epochs')
     parser.add_argument('--bs', type=int, default=64, help='batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--from_scratch', action='store_true', help='Train from scratch')
     return parser.parse_args()
 
 
@@ -42,10 +43,11 @@ def trainer():
     max_epochs = args.max_epochs
     w_cls = args.w_cls
     w_patch = args.w_patch
+    pretrained = not args.from_scratch
     print_freq = 100
     eval_freq = 1
     save_freq = 1
-    exp_name = f'{args.dataset}/patch_transformer_{args.model}/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}_lr_{args.lr}'
+    exp_name = f'{args.dataset}/patch_transformer_{args.model}_pretrained_{pretrained}/w_cls_{w_cls:.2f}_w_patch_{w_patch:.2f}_lr_{args.lr}'
 
     train_transform = T.Compose([
         T.RandomResizedCrop(224),
@@ -55,8 +57,8 @@ def trainer():
     if args.dataset == 'imagenet1k':
         train_dataset = ImageNet('/home/shuqin/hdd/datasets/imagenet', 'train', transform=train_transform)
     else:
-        train_dataset = Places365('/home/shuqin/hdd/datasets/places365', 'train-standard', small=True, transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=8, shuffle=True, pin_memory=True)
+        train_dataset = Places365('/home/shuqin/datasets/places365', 'train-standard', small=True, transform=train_transform)
+    train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=4, shuffle=True, pin_memory=True)
 
     val_transform = T.Compose([
         T.Resize(256),
@@ -66,13 +68,13 @@ def trainer():
     if args.dataset == 'imagenet1k':
         val_dataset = ImageNet('/home/shuqin/hdd/datasets/imagenet', 'val', transform=val_transform)
     else:
-        val_dataset = Places365('/home/shuqin/hdd/datasets/places365', 'val', small=True, transform=val_transform)
+        val_dataset = Places365('/home/shuqin/datasets/places365', 'val', small=True, transform=val_transform)
     val_loader = DataLoader(val_dataset, batch_size=bs, num_workers=4, shuffle=False, pin_memory=True)
 
     vit_norm = T.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]) if args.model == 'small' else T.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
     cnn_norm = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-    transformer = vit_model_zoo[args.model](len(train_dataset.classes), 1000, pretrained=True).cuda()
+    transformer = vit_model_zoo[args.model](len(train_dataset.classes), 1000, pretrained=pretrained).cuda()
     optimizer = torch.optim.Adam(transformer.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, max_epochs)
 
