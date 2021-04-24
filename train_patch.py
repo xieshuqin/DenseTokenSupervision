@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--bs', type=int, default=64, help='batch size')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
     parser.add_argument('--from_scratch', action='store_true', help='Train from scratch')
+    parser.add_argument('--download', action='store_true', help='Download data or not')
     return parser.parse_args()
 
 
@@ -44,6 +45,7 @@ def trainer():
     w_cls = args.w_cls
     w_patch = args.w_patch
     pretrained = not args.from_scratch
+    download = args.download
     print_freq = 100
     eval_freq = 1
     save_freq = 1
@@ -57,8 +59,8 @@ def trainer():
     if args.dataset == 'imagenet1k':
         train_dataset = ImageNet('/home/shuqin/hdd/datasets/imagenet', 'train', transform=train_transform)
     else:
-        train_dataset = Places365('/home/shuqin/datasets/places365', 'train-standard', small=True, transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=4, shuffle=True, pin_memory=True)
+        train_dataset = Places365('/home/shuqin/datasets/places365', 'train-standard', small=True, download=download, transform=train_transform)
+    train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=8, shuffle=True, pin_memory=True)
 
     val_transform = T.Compose([
         T.Resize(256),
@@ -68,7 +70,7 @@ def trainer():
     if args.dataset == 'imagenet1k':
         val_dataset = ImageNet('/home/shuqin/hdd/datasets/imagenet', 'val', transform=val_transform)
     else:
-        val_dataset = Places365('/home/shuqin/datasets/places365', 'val', small=True, transform=val_transform)
+        val_dataset = Places365('/home/shuqin/datasets/places365', 'val', small=True, download=download, transform=val_transform)
     val_loader = DataLoader(val_dataset, batch_size=bs, num_workers=4, shuffle=False, pin_memory=True)
 
     vit_norm = T.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]) if args.model == 'small' else T.Normalize([0.5,0.5,0.5], [0.5,0.5,0.5])
